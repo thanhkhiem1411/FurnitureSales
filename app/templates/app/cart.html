@@ -1,0 +1,67 @@
+{% extends 'app/base.html' %}
+{% load static %}
+{% block cart_content %}
+  <div class="container-fluid pt-5 pb-5">
+    <div class="col-lg-12">
+      <h3>Your order</h3>
+      <div class="box-element">
+        <div class="cart-row text-center align-items-center justify-content-around">
+          <div class="col-lg-3 col-md-3">
+            <strong>Product</strong>
+          </div>
+          <div class="col-lg-3 col-md-3">
+            <strong>Price</strong>
+          </div>
+          <div class="col-lg-3 col-md-3">
+            <strong>Quantity</strong>
+          </div>
+          <div class="col-lg-3 col-md-3">
+            <strong>Total</strong>
+          </div>
+        </div>
+
+        {% for item in items %}
+          <div class="cart-row text-center align-items-center">
+            <div class="col-lg-3 col-md-3 d-flex align-items-center">
+              <img class="row-image m-2" src="{{ item.product.ImageURL }}" alt="{{ item.product.name }}" />
+              <p>{{ item.product.name }}</p>
+            </div>
+            <div class="col-lg-3 col-md-3">
+              <p>{{ item.product.price|floatformat:0 }} VNĐ</p>
+            </div>
+            <div class="col-lg-3 col-md-3">
+              <p class="quantity text-dark">{{ item.quantity }}</p>
+              <div class="quantity">
+                <form method="post">
+                  {% csrf_token %}
+                  <img data-product="{{ item.product.id }}" data-action="add" class="chg-quantity update-cart" src="{% static 'images/arrow-up.png' %}" alt="Increase quantity" />
+                  <img data-product="{{ item.product.id }}" data-action="remove" class="chg-quantity update-cart" src="{% static 'images/arrow-down.png' %}" alt="Increase quantity" />
+                </form>
+              </div>
+            </div>
+            <div class="col-lg-3 col-md-3">
+              <p>{{ item.get_total|floatformat:0 }} VNĐ</p>
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+      </br>
+      <div class="box-element">
+        <a class="btn" href="{% url 'home' %}">&#x2190; Continue shopping</a>
+        <table class="table">
+          <tr>
+            <th>
+              <h5>Product: <strong>{{ order.get_cart_items }}</strong></h5>
+            </th>
+            <th>
+              <h5>Total: <strong>{{ order.get_cart_total|floatformat:0 }} VNĐ</strong></h5>
+            </th>
+            <th>
+              <a style="float:right; margin:5px;" class="btn btn-success" href="{% url 'checkout' %}">Payment</a>
+            </th>
+          </tr>
+        </table>
+      </div>
+    </div>
+  </div>
+{% endblock %}

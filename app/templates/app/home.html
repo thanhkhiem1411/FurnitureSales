@@ -1,0 +1,56 @@
+{% extends 'app/base.html' %}
+{% load static %}
+
+{% block main_content %}
+  {% include 'app/slider.html' %}
+  {% comment %}Sản phẩm{% endcomment %}
+
+  <div class="container p-0">
+    <div class="title">Product</div>
+
+    <div class="product-container container-fluid">
+      <!-- List product -->
+      {% for product in products|slice:':3' %}
+        <div class="content col-md-4">
+          <img class="product-img" src="{{ product.ImageURL }}" alt="" />
+          <div class="product-info">
+            <div class="product-name">{{ product.name }}</div>
+            <div class="product-code">{{ product.code }}</div>
+            <div class="product-price">{{ product.price|floatformat:0 }} VNĐ</div>
+            <div class="btn-group">
+              <form method="post">
+                {% csrf_token %}
+                <button data-product="{{ product.id }}" data-action="add" class="btn btn-outline-secondary add-btn update-cart">Add to cart</button>
+                <button data-product="{{ product.id }}" class="btn btn-outline-success add-btn view_product"><a href="{% url 'detail' %}">View</a></button>
+              </form>
+            </div>
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% if messages %}
+    {% for message in messages %}
+      <script>
+        alert('{{ message }}')
+      </script>
+    {% endfor %}
+{% endif %}
+  {% include 'app/countdown.html' %}
+  <div class="container">
+    <div class="title">Article</div>
+    <div class="row article-container justify-content-around mb-5">
+      {% for article in articles|slice:':3' %}
+      <a href="{% url 'article' %}" class="content col-md-4">
+        <div >
+            <img class="product-img" src="{{ article.image.url }}" alt="" />
+          <div class="article-content text-center">
+            <div class="article-name">{{ article.name }}</div>
+            <div class="article-code">{{ article.date_up }}</div>
+          </div>
+        </div>
+      </a>
+      {% endfor %} 
+    </div>
+  </div>
+{% endblock %}

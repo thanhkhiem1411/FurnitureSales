@@ -1,0 +1,51 @@
+{% extends 'app/base.html' %}
+{% load static %}
+
+{% block product_content %}
+  <div id="body" class="container-fluid p-0">
+    <div class="banner-product">
+      <img class="img-fluid" src="{% static 'images/BannerProduct.png' %}" alt="" />
+    </div>
+
+    <div class="title">Product</div>
+
+    <!-- List product -->
+    <div class="product-container row p-0">
+      {% for product in products %}
+        <div class="content col-md-4">
+          <img class="product-img" src="{{ product.ImageURL }}" alt="{{ product.name }}" />
+
+          <div class="product-info">
+            <div class="product-name">{{ product.name }}</div>
+            <div class="product-code">{{ product.code }}</div>
+            <div class="product-price">{{ product.price|floatformat:0 }} VNĐ</div>
+
+            <div class="btn-group">
+              {# Add to cart dùng JS class update-cart, không cần form submit #}
+              <button type="button"
+                      data-product="{{ product.id }}"
+                      data-action="add"
+                      class="btn btn-outline-secondary add-btn update-cart">
+                Add to cart
+              </button>
+
+              {# ✅ View đi đúng trang detail theo id #}
+              <a class="btn btn-outline-success"
+                 href="{% url 'product_detail' product.id %}">
+                View
+              </a>
+            </div>
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+  </div>
+
+  {% if messages %}
+    {% for message in messages %}
+      <script>
+        alert('{{ message }}')
+      </script>
+    {% endfor %}
+  {% endif %}
+{% endblock %}

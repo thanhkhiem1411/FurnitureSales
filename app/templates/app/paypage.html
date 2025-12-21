@@ -1,0 +1,41 @@
+{% extends 'app/base.html' %}
+{% load static %}
+{% block pay_page %}
+
+{% if submitted %}
+      <div class="alert alert-success" role="alert">
+          Product added successfully
+      </div>
+  {% else %}
+<form id="form" method="POST" enctype="multipart/form-data" action="{% url 'pay_page' %}">
+<div class="container-fluid pt-5 pb-5">
+  <div class="col-lg-12 col-md-12 col-sm-12">
+    <div class="box-element" id="form-wrapper">
+        <p>Delivery address:</p>
+        <div id="shipping-info">
+          {% csrf_token %}
+
+          {{ form.as_p }}
+
+        </div>
+    </div>
+  </div>
+  <div class="col-lg-12 col-md-12 col-sm-12">
+    <div class="form-group box-element mb-3">
+        <p>Payment method:</p>
+      <div class="form-check">
+        <input class="form-check-input" type="radio" name="payment_method" id="payment_method_cod" value="cod" checked>
+        <label class="form-check-label" for="payment_method_cod">Cash on Delivery (COD)</label>
+      </div>
+      <!-- <div class="form-check">
+        <input class="form-check-input" type="radio" name="payment_method" id="payment_method_online" value="cod">
+        <label class="form-check-label" for="payment_method">Thanh toán qua MOMO</label>
+      </div> -->
+    </div>
+
+    <input id="form-button" class="btn btn-success btn-block" type="submit" value="Thanh toán">
+  </div>
+</div>
+</form>
+{% endif %}
+{% endblock %}

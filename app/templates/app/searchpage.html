@@ -1,0 +1,30 @@
+{% extends 'app/base.html' %}
+{% load static %}
+{% block search_page %}
+  <div class="container p-0">
+    {% if searched %}
+      <h1 class="text-center">Search results for {{ searched }}</h1>
+      <div class="product-container row p-0">
+        {% for product in product %}
+          <div class="content col-md-4">
+            <img class="product-img" src="{{ product.ImageURL }}" alt="" />
+            <div class="product-info">
+              <div class="product-name">{{ product.name }}</div>
+              <div class="product-code">{{ product.code }}</div>
+              <div class="product-price">{{ product.price|floatformat:0 }}</div>
+              <div class="btn-group">
+                <form method="post">
+                  {% csrf_token %}
+                  <button data-product="{{ product.id }}" data-action="add" class="btn btn-outline-secondary add-btn update-cart">Add to cart</button>
+                  <button data-product="{{ product.id }}" class="btn btn-outline-success add-btn view_product">View</button>
+                </form>
+              </div>
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+    {% else %}
+      <h1 class="text-center">What do you look for? ?</h1>
+    {% endif %}
+  </div>
+{% endblock %}

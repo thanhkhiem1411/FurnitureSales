@@ -1,0 +1,30 @@
+{% extends 'app/base.html' %}
+{% load static %}
+{% block addProduct %}
+
+<div class="container">
+    <div class="row">
+        <div class="col-12">
+            <h1 class="text-center">Add articles</h1>
+        </div>
+    </div>
+    <div class="row">
+        <div class="col-12">
+
+            {% if submitted %}
+                <div class="alert alert-success" role="alert">
+                    Successfully added a post
+                </div>
+            {% else %}
+            <form method="POST" enctype="multipart/form-data" action="{% url 'addArticle' %}">
+                {% csrf_token %}
+
+                {{ form_A.as_p }}
+                <button type="submit" class="btn btn-primary my-3">Add articles </button>
+            </form>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+{% endblock %}

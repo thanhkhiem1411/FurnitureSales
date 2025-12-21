@@ -1,0 +1,179 @@
+{% extends 'app/base.html' %}
+{% load static %}
+
+{% block product_detail %}
+<div class="container py-4">
+  <!-- Breadcrumb -->
+  <nav aria-label="breadcrumb" class="mb-3">
+    <ol class="breadcrumb mb-0">
+      <li class="breadcrumb-item"><a href="{% url 'home' %}">Home</a></li>
+      <li class="breadcrumb-item"><a href="{% url 'product' %}">Products</a></li>
+      <li class="breadcrumb-item active" aria-current="page">{{ product.name }}</li>
+    </ol>
+  </nav>
+
+  <!-- ✅ Đảm bảo luôn có CSRF token trong DOM cho JS đọc -->
+  <form style="display:none;">
+    {% csrf_token %}
+  </form>
+
+  <div class="card shadow-sm border-0">
+    <div class="card-body">
+      <div class="row g-4 align-items-start">
+        <!-- Image -->
+        <div class="col-lg-6">
+          <div class="border rounded bg-light p-2">
+            <img
+              src="{{ product.ImageURL }}"
+              class="img-fluid rounded"
+              alt="{{ product.name }}"
+              style="width:100%; max-height:520px; object-fit:cover;"
+            />
+          </div>
+        </div>
+
+        <!-- Info -->
+        <div class="col-lg-6">
+          <h2 class="mb-2">{{ product.name }}</h2>
+
+          <div class="d-flex flex-wrap gap-2 align-items-center mb-3">
+            <span class="badge bg-secondary">SKU: {{ product.code }}</span>
+            <span class="text-success small">In stock</span>
+          </div>
+
+          <div class="mb-3">
+            <div class="fs-3 fw-bold">
+              {{ product.price|floatformat:0 }} <span class="fs-6 fw-normal">VNĐ</span>
+            </div>
+            <div class="text-muted small">
+              Price may vary by promotions or delivery options.
+            </div>
+          </div>
+
+          <!-- Description -->
+          <div class="mb-4">
+            <h6 class="mb-2">Description</h6>
+            {% if product.description %}
+              <p class="mb-0 text-muted" style="line-height:1.7;">
+                {{ product.description }}
+              </p>
+            {% else %}
+              <p class="mb-0 text-muted" style="line-height:1.7;">
+                This product currently has no detailed description.
+              </p>
+            {% endif %}
+          </div>
+
+          <!-- Quantity + Actions -->
+          <div class="d-flex flex-wrap gap-3 align-items-center">
+            <!-- Quantity picker -->
+            <div class="d-flex align-items-center gap-2">
+              <span class="text-muted">Quantity</span>
+              <div class="input-group" style="width: 160px;">
+                <button class="btn btn-outline-secondary" type="button" id="qty-minus">-</button>
+
+                <!-- ✅ addcart.js sẽ đọc id="qty-input" và gửi qty lên backend -->
+                <input
+                  type="number"
+                  class="form-control text-center"
+                  id="qty-input"
+                  value="1"
+                  min="1"
+                  max="99"
+                />
+
+                <button class="btn btn-outline-secondary" type="button" id="qty-plus">+</button>
+              </div>
+            </div>
+
+            <!-- Add to cart (CHỈ 1 CLICK = 1 REQUEST với qty) -->
+            <button
+              type="button"
+              data-product="{{ product.id }}"
+              data-action="add"
+              class="btn btn-outline-secondary add-btn update-cart"
+            >
+              Add to cart
+            </button>
+
+            <!-- Back -->
+            <a href="{% url 'product' %}" class="btn btn-link">← Back to products</a>
+          </div>
+
+          <hr class="my-4">
+
+          <div class="row g-3 text-muted small">
+            <div class="col-md-6">
+              <div class="fw-semibold text-dark mb-1">Shipping</div>
+              <div>Fast delivery in 1–3 days (depending on location).</div>
+            </div>
+            <div class="col-md-6">
+              <div class="fw-semibold text-dark mb-1">Return policy</div>
+              <div>Return within 7 days if the product is unused and intact.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tabs -->
+      <div class="mt-4">
+        <ul class="nav nav-tabs" id="detailTabs" role="tablist">
+          <li class="nav-item" role="presentation">
+            <button class="nav-link active" id="spec-tab" data-bs-toggle="tab" data-bs-target="#spec" type="button" role="tab">
+              Specifications
+            </button>
+          </li>
+          <li class="nav-item" role="presentation">
+            <button class="nav-link" id="note-tab" data-bs-toggle="tab" data-bs-target="#note" type="button" role="tab">
+              Notes
+            </button>
+          </li>
+        </ul>
+
+        <div class="tab-content border border-top-0 rounded-bottom p-3" id="detailTabsContent">
+          <div class="tab-pane fade show active" id="spec" role="tabpanel">
+            <ul class="mb-0 text-muted">
+              <li>Product name: {{ product.name }}</li>
+              <li>SKU: {{ product.code }}</li>
+              <li>Price: {{ product.price|floatformat:0 }} VNĐ</li>
+            </ul>
+          </div>
+          <div class="tab-pane fade" id="note" role="tabpanel">
+            <div class="text-muted">
+              If you need customization (size/material/color), please contact our support.
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+  // Quantity control (client-side)
+  (function() {
+    const input = document.getElementById("qty-input");
+    const minus = document.getElementById("qty-minus");
+    const plus = document.getElementById("qty-plus");
+
+    function clampQty(v) {
+      const n = parseInt(v, 10);
+      if (isNaN(n) || n < 1) return 1;
+      if (n > 99) return 99;
+      return n;
+    }
+
+    function setQty(v) {
+      input.value = clampQty(v);
+    }
+
+    minus.addEventListener("click", () => setQty(parseInt(input.value || "1", 10) - 1));
+    plus.addEventListener("click", () => setQty(parseInt(input.value || "1", 10) + 1));
+    input.addEventListener("input", () => setQty(input.value));
+    input.addEventListener("blur", () => setQty(input.value));
+  })();
+</script>
+{% endblock %}
+
+

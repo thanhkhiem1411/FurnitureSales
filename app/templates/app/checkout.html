@@ -1,0 +1,161 @@
+{% extends 'app/base.html' %}
+{% load static %}
+
+{% block checkout_content %}
+  <div class="container mb-5 mt-5">
+    <div class="row d-flex">
+      <!-- LEFT: ORDER -->
+      <div class="col-lg-6">
+        <div class="box-element">
+          <a class="btn btn-outline-dark" href="{% url 'cart' %}">&#x2190;Return to cart</a>
+          <hr />
+          <h3>Order</h3>
+          <hr />
+
+          {% for item in items %}
+            <div class="cart-row">
+              <div class="col-lg-3 d-flex">
+                <img class="row-image" src="{{ item.product.ImageURL }}" />
+              </div>
+              <div class="col-lg-3">
+                <p>{{ item.product.name }}</p>
+              </div>
+              <div class="col-lg-3">
+                <p>{{ item.product.price|floatformat:0 }} VNĐ</p>
+              </div>
+              <div class="col-lg-3">
+                <p>{{ item.quantity }}</p>
+              </div>
+            </div>
+          {% endfor %}
+        </div>
+      </div>
+
+      <!-- RIGHT: DISCOUNT + SUMMARY -->
+      <div class="col-lg-6">
+        <div class="box-element">
+          <div class="sale-container d-flex justify-content-between align-items-center">
+            <h5 class="col-lg-4 mb-0">Discount code</h5>
+
+            <!-- CSRF token holder (so JS can read it like your update-cart script) -->
+            <form id="discount-form" class="code-input align-items-center" onsubmit="return false;">
+              {% csrf_token %}
+              <input
+                id="discount-code"
+                class="input-code-sale"
+                type="text"
+                name="sale"
+                placeholder="Enter Discount code.."
+                value="{{ discount_code|default:'' }}"
+                autocomplete="off"
+              />
+              <button id="apply-discount-btn" type="button" class="btn btn-warning">
+                Apply
+              </button>
+            </form>
+          </div>
+
+          <div id="discount-msg" class="mt-2" style="font-size: 14px;"></div>
+
+          <hr />
+
+          <!-- Subtotal -->
+          <h5>
+            Total amount:
+            <span id="subtotal-amount">{{ order.get_cart_total|floatformat:0 }}</span> VNĐ
+          </h5>
+
+          <!-- Discount -->
+          <h5>
+            Can be reduced:
+            <span id="discount-amount">{{ discount_amount|default:0|floatformat:0 }}</span> VNĐ
+          </h5>
+
+          <!-- Final total -->
+          <h5>
+            Total after discount:
+            <span id="final-amount">
+              {% if final_total is not None %}
+                {{ final_total|floatformat:0 }}
+              {% else %}
+                {{ order.get_cart_total|floatformat:0 }}
+              {% endif %}
+            </span> VNĐ
+          </h5>
+
+          <a class="btn btn-success mt-3" href="{% url 'pay_page' %}">Continue payment</a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      const btn = document.getElementById("apply-discount-btn");
+      const input = document.getElementById("discount-code");
+      const msg = document.getElementById("discount-msg");
+
+      const subtotalEl = document.getElementById("subtotal-amount");
+      const discountEl = document.getElementById("discount-amount");
+      const finalEl = document.getElementById("final-amount");
+
+      function setMsg(text, ok) {
+        msg.textContent = text || "";
+        msg.style.color = ok ? "green" : "red";
+      }
+
+      function getCsrfToken() {
+        const el = document.querySelector('[name=csrfmiddlewaretoken]');
+        return el ? el.value : "";
+      }
+
+      btn.addEventListener("click", function () {
+        const code = (input.value || "").trim();
+        if (!code) {
+          setMsg("Please enter a discount code.", false);
+          return;
+        }
+
+        const csrfToken = getCsrfToken();
+        if (!csrfToken) {
+          setMsg("Missing CSRF token. Please refresh the page.", false);
+          return;
+        }
+
+        setMsg("Applying...", true);
+
+        fetch("/apply-discount/", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-CSRFToken": csrfToken
+          },
+          body: JSON.stringify({ code: code })
+        })
+          .then(res => res.json())
+          .then(data => {
+            if (!data.ok) {
+              setMsg(data.error || "Invalid discount code.", false);
+
+              // reset discount display if server reset it
+              if (typeof data.subtotal !== "undefined") subtotalEl.textContent = Number(data.subtotal).toLocaleString("en-US");
+              if (typeof data.discount !== "undefined") discountEl.textContent = Number(data.discount).toLocaleString("en-US");
+              if (typeof data.total !== "undefined") finalEl.textContent = Number(data.total).toLocaleString("en-US");
+              return;
+            }
+
+            setMsg("Discount applied successfully!", true);
+
+            // update numbers
+            subtotalEl.textContent = Number(data.subtotal).toLocaleString("en-US");
+            discountEl.textContent = Number(data.discount).toLocaleString("en-US");
+            finalEl.textContent = Number(data.total).toLocaleString("en-US");
+          })
+          .catch(() => {
+            setMsg("Error applying discount. Please try again.", false);
+          });
+      });
+    })();
+  </script>
+{% endblock %}
+

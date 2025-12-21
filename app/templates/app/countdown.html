@@ -1,0 +1,37 @@
+{% load static %}
+{% block countdown %}
+  <div class="product-sale container-fluid d-flex">
+    <div class="product-sale-img">
+      <img class="product-sale-img img-fluid" src="{% static 'images/ProductSale.png' %}" alt="ProductSale" />
+    </div>
+    <div class="product-sale-content">
+      <div class="product-title">SPECIAL OFFER</div>
+      <div class="product-name">HEXCO CHAIR</div>
+      <div class="product-script">
+        The group buying program with discounted prices starts on [date]. <b>19/12</b> to <b>25/12/2025</b>. With reduced prices <b>50%</b>.<br />
+        For <b>The first 50 group purchase orders!</b>
+      </div>
+      <div class="clock-countdown">
+        <div class="clock-container">
+          <div class="clock-item">
+            <span id="days" class="countdown mb-3">00</span>
+            DATE
+          </div>
+          <div class="clock-item">
+            <span id="hours" class="countdown mb-3">00</span>
+            HOUR
+          </div>
+          <div class="clock-item">
+            <span id="minutes" class="countdown mb-3">00</span>
+            MINUTE
+          </div>
+          <div class="clock-item">
+            <span id="seconds" class="countdown mb-3">00</span>
+            SECOND
+          </div>
+        </div>
+      </div>
+      <button class="button-product-sale">BYE NOW</button>
+    </div>
+  </div>
+{% endblock %}

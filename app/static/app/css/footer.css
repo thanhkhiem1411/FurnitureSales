@@ -1,0 +1,95 @@
+
+.footer {
+    background-color: #2A2A2A;
+}
+  
+.nav-footer {
+    display: flex;
+    padding: 0px;
+}
+
+.footer-title {
+    font-size: var(--menu-font-size);
+}
+  
+.footer-title, .footer-item, .bottom-footer-item {
+    color: #EFEFEF;
+    &:hover {
+        color: #F86963;;
+    }
+}
+
+.footer-item {
+    font-size: var(--menu-small-font-size);
+}
+
+.bottom-footer-item {
+    font-size: var(--title-font-size);
+}
+
+.footer-list{
+    margin: 0px;
+}
+.btn-footer{
+    border-radius: 30px;
+    height: 50px;
+    width: 200px;
+    font-size: var(--menu-small-font-size);
+}
+
+.bottom-footer{
+    display: flex;
+    justify-content: space-between;
+}
+
+.bottom-footer-item{
+    font-size: 12px;
+}
+
+.imgBCT{
+    justify-content: center;
+}
+
+.mobile-footer{
+    background-color: #2A2A2A;
+}
+
+.footer-tree{
+    padding: 0 20px;
+}
+
+.option-text{
+    font-family: var(--menu-font-size);
+    font-size: 14px;
+    font-weight: 500;
+    line-height: 18px;
+    letter-spacing: 0.30000001192092896px;
+    color: #FFFFFF;
+}
+
+.title{
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.title img {
+    transform: rotate(90deg);
+}
+
+.bottom-footer{
+    color: #EFEFEF;
+}
+
+
+/* Ẩn options mặc định */
+.options {
+    display: none;
+}
+
+/* Hiển thị options khi có class active */
+.options.active {
+    display: block;
+}
+

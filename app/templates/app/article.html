@@ -1,0 +1,26 @@
+{% extends 'app/base.html' %} 
+{% load static %}
+{% block article_content %}
+  {% load static %}
+  <div class="container">
+    <div class="title">Article</div>
+    <div class="row article-container justify-content-around mb-5">
+      {% for article in articles %}
+      <div class="row">
+        <div class="content col-lg-5 mx-4">
+          <div class="article-img ">
+            <img src="{{ article.image.url }}" alt="" />
+          </div>
+          <div class="article-content text-center">
+            <div class="article-name">{{ article.name }}</div>
+            <div class="article-code">{{ article.date_up }}</div>
+          </div>
+        </div>
+        <div class="content col">
+          <div class="article-code">{{ article.content }}</div>
+        </div>
+      </div>
+      {% endfor %} 
+    </div>
+  </div>
+{% endblock %}
