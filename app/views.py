@@ -30,16 +30,16 @@ def _get_order_context(request):
     Return: (customer, order, items, cartItems)
     - Nếu anonymous hoặc admin -> trả order dummy, items empty
     """
-    if request.user.is_authenticated and not _is_admin(request):
+    if request.user.is_authenticated and not _is_admin(request) and hasattr(request.user, "customer"):
         customer = request.user.customer
         order, _ = Order.objects.get_or_create(customer=customer, complete=False)
-        items = order.orderitem_set.select_related("product").all()
+        items = order.orderitem_set.all()
         cartItems = order.get_cart_items
         return customer, order, items, cartItems
 
-    # anonymous hoặc admin
+    # anonymous hoặc admin (hoặc user không có customer)
     customer = None
-    order = {"get_cart_items": 0, "get_cart_total": 0}
+    order = {'get_cart_items': 0, 'get_cart_total': 0}
     items = []
     cartItems = 0
     return customer, order, items, cartItems
@@ -65,26 +65,11 @@ def _merge_duplicate_orderitems(order):
         keep_id = g["keep_id"]
         total_qty = g["total_qty"] or 0
 
+        # update row giữ lại
         OrderItem.objects.filter(id=keep_id).update(quantity=total_qty)
+
+        # xoá các row còn lại
         OrderItem.objects.filter(order=order, product_id=g["product_id"]).exclude(id=keep_id).delete()
-
-
-def _get_discount_snapshot_for_order(order, request):
-    """
-    Tính subtotal/discount/final_total dựa trên session discount.
-    Dùng cho checkout + payPage + payment_success.
-    """
-    subtotal = int(order.get_cart_total)
-
-    discount_amount = int(request.session.get("discount_amount", 0) or 0)
-    discount_code = request.session.get("discount_code", "") or ""
-
-    if discount_amount > subtotal:
-        discount_amount = subtotal
-        request.session["discount_amount"] = discount_amount
-
-    final_total = subtotal - discount_amount
-    return subtotal, discount_amount, discount_code, final_total
 
 
 # -----------------------------
@@ -92,7 +77,7 @@ def _get_discount_snapshot_for_order(order, request):
 # -----------------------------
 def home(request):
     is_admin = _is_admin(request)
-    _, order, items, cartItems = _get_order_context(request)
+    customer, order, items, cartItems = _get_order_context(request)
 
     articles = Article.objects.all()
     products = Product.objects.all()
@@ -110,7 +95,7 @@ def home(request):
 
 def product(request):
     is_admin = _is_admin(request)
-    _, order, items, cartItems = _get_order_context(request)
+    customer, order, items, cartItems = _get_order_context(request)
 
     products = Product.objects.all()
     context = {
@@ -123,8 +108,9 @@ def product(request):
 
 def product_detail(request, pk):
     product = get_object_or_404(Product, id=pk)
+
     is_admin = _is_admin(request)
-    _, order, items, cartItems = _get_order_context(request)
+    customer, order, items, cartItems = _get_order_context(request)
 
     context = {
         "product": product,
@@ -136,7 +122,7 @@ def product_detail(request, pk):
 
 def article(request):
     is_admin = _is_admin(request)
-    _, order, items, cartItems = _get_order_context(request)
+    customer, order, items, cartItems = _get_order_context(request)
 
     articles = Article.objects.all()
     context = {
@@ -152,9 +138,9 @@ def cart(request):
     customer, order, items, cartItems = _get_order_context(request)
 
     # ✅ Gộp duplicate để cart hiển thị đúng
-    if request.user.is_authenticated and not is_admin:
+    if request.user.is_authenticated and not is_admin and not isinstance(order, dict):
         _merge_duplicate_orderitems(order)
-        items = order.orderitem_set.select_related("product").all()
+        items = order.orderitem_set.all()
         cartItems = order.get_cart_items
 
     context = {
@@ -172,13 +158,16 @@ def updateItem(request):
     AJAX add/remove item.
     ✅ Fix duplicate OrderItem khi user add nhiều lần nhanh bằng:
       - transaction.atomic
-      - merge duplicates trước & sau update
+      - merge duplicates sau mỗi lần update
     """
     if not request.user.is_authenticated:
         return JsonResponse({"ok": False, "error": "Please login first."}, status=401)
 
     if _is_admin(request):
         return JsonResponse({"ok": False, "error": "Admin account cannot add to cart here."}, status=403)
+
+    if not hasattr(request.user, "customer"):
+        return JsonResponse({"ok": False, "error": "Customer profile not found."}, status=400)
 
     try:
         data = json.loads(request.body.decode("utf-8"))
@@ -197,10 +186,10 @@ def updateItem(request):
     with transaction.atomic():
         order, _ = Order.objects.get_or_create(customer=customer, complete=False)
 
-        # merge trước
+        # merge trước (phòng trường hợp đã bị duplicate từ trước)
         _merge_duplicate_orderitems(order)
 
-        orderItem, _ = OrderItem.objects.get_or_create(order=order, product=product)
+        orderItem, created = OrderItem.objects.get_or_create(order=order, product=product)
 
         if action == "add":
             orderItem.quantity += 1
@@ -212,34 +201,43 @@ def updateItem(request):
                 orderItem.delete()
             else:
                 orderItem.save()
+
         else:
             return JsonResponse({"ok": False, "error": "Invalid action."}, status=400)
 
-        # merge sau
+        # merge lại lần nữa để chắc chắn không còn duplicate
         _merge_duplicate_orderitems(order)
 
-    return JsonResponse({"ok": True}, safe=False)
+    return JsonResponse({"ok": True})
 
 
 def checkout(request):
     is_admin = _is_admin(request)
 
-    if request.user.is_authenticated and not is_admin:
+    if request.user.is_authenticated and not is_admin and hasattr(request.user, "customer"):
         customer = request.user.customer
         order, _ = Order.objects.get_or_create(customer=customer, complete=False)
 
+        # ✅ gộp duplicate để tổng tiền đúng
         _merge_duplicate_orderitems(order)
 
-        items = order.orderitem_set.select_related("product").all()
+        items = order.orderitem_set.all()
         cartItems = order.get_cart_items
 
-        subtotal, discount_amount, discount_code, final_total = _get_discount_snapshot_for_order(order, request)
+        discount_amount = int(request.session.get("discount_amount", 0) or 0)
+        discount_code = request.session.get("discount_code", "")
+
+        subtotal = int(order.get_cart_total)
+        if discount_amount > subtotal:
+            discount_amount = subtotal
+            request.session["discount_amount"] = discount_amount
+
+        final_total = subtotal - discount_amount
 
     else:
         items = []
-        order = {"get_cart_items": 0, "get_cart_total": 0}
+        order = {'get_cart_items': 0, 'get_cart_total': 0}
         cartItems = 0
-        subtotal = 0
         discount_amount = 0
         discount_code = ""
         final_total = 0
@@ -248,12 +246,9 @@ def checkout(request):
         "items": items,
         "order": order,
         "cartItems": cartItems,
-
-        "subtotal": subtotal,
         "discount_amount": discount_amount,
         "discount_code": discount_code,
         "final_total": final_total,
-
         "is_admin": is_admin,
     }
     return render(request, "app/checkout.html", context)
@@ -271,6 +266,9 @@ def apply_discount(request):
     if _is_admin(request):
         return JsonResponse({"ok": False, "error": "Admin account cannot apply discount here."}, status=403)
 
+    if not hasattr(request.user, "customer"):
+        return JsonResponse({"ok": False, "error": "Customer profile not found."}, status=400)
+
     try:
         data = json.loads(request.body.decode("utf-8"))
     except Exception:
@@ -282,13 +280,14 @@ def apply_discount(request):
     order, _ = Order.objects.get_or_create(customer=customer, complete=False)
 
     _merge_duplicate_orderitems(order)
+
     subtotal = int(order.get_cart_total)
 
-    # ✅ Danh sách voucher nằm ở đây
+    # ✅ Bạn sửa danh sách mã tại đây (file chứa mã giảm giá chính là views.py)
     COUPONS = {
-        "SAVE10": {"type": "percent", "value": 10},       # giảm 10%
-        "SAVE5": {"type": "percent", "value": 5},         # giảm 5%
-        "LESS100K": {"type": "fixed", "value": 100000},   # giảm 100k
+        "SAVE10": {"type": "percent", "value": 10},      # giảm 10%
+        "SAVE5": {"type": "percent", "value": 5},        # giảm 5%
+        "LESS100K": {"type": "fixed", "value": 100000},  # giảm 100k
     }
 
     if not code or code not in COUPONS:
@@ -324,119 +323,134 @@ def apply_discount(request):
 
 def payPage(request):
     """
-    Trang nhập thông tin giao hàng & thanh toán COD.
-    ✅ Sau khi thanh toán: redirect sang payment_success/<order_id>
-    ✅ Trang success hiển thị đúng total sau discount bằng snapshot session last_*
+    ✅ Sau khi thanh toán xong:
+    - Không crash vì lỗi SSL gửi mail
+    - Redirect sang trang success đẹp hơn
     """
-    if not (request.user.is_authenticated and not _is_admin(request)):
-        messages.error(request, "Please login with a customer account to continue payment.")
-        return redirect("signin")
+    submitted = False
 
-    customer = request.user.customer
-    order = Order.objects.get(customer=customer, complete=False)
+    if request.user.is_authenticated and not _is_admin(request) and hasattr(request.user, "customer"):
+        customer = request.user.customer
+        order, _ = Order.objects.get_or_create(customer=customer, complete=False)
 
-    _merge_duplicate_orderitems(order)
+        _merge_duplicate_orderitems(order)
 
-    # lấy discount hiện tại (trước khi clear)
-    subtotal, discount_amount, discount_code, final_total = _get_discount_snapshot_for_order(order, request)
+        # giỏ trống thì quay về product
+        if order.get_cart_items == 0:
+            messages.info(request, "Your cart is empty.")
+            return redirect("product")
 
-    form = DeliveryForm(initial={"customer": customer, "order": order})
+        form = DeliveryForm(initial={'customer': customer, 'order': order})
 
-    if request.method == "POST":
-        form = DeliveryForm(request.POST)
-        if form.is_valid():
-            form.save()
+        if request.method == 'POST':
+            form = DeliveryForm(request.POST)
+            if form.is_valid():
+                delivery = form.save(commit=False)
+                delivery.customer = customer
+                delivery.order = order
+                delivery.save()
 
-            # ✅ snapshot để success page show đúng giá sau giảm
-            request.session["last_order_id"] = order.id
-            request.session["last_subtotal"] = int(subtotal)
-            request.session["last_discount_amount"] = int(discount_amount)
-            request.session["last_discount_code"] = discount_code
-            request.session["last_final_total"] = int(final_total)
+                # Tính tổng + discount (để show ở success page / email)
+                subtotal = int(order.get_cart_total)
+                discount_amount = int(request.session.get("discount_amount", 0) or 0)
+                if discount_amount > subtotal:
+                    discount_amount = subtotal
+                final_total = subtotal - discount_amount
+                discount_code = request.session.get("discount_code", "")
 
-            # complete order
-            order.complete = True
-            order.save()
+                # Complete order
+                order.complete = True
+                order.save()
 
-            # ✅ clear discount để đơn sau không bị dính voucher cũ
-            request.session["discount_code"] = ""
-            request.session["discount_amount"] = 0
+                # Lưu summary vào session để trang success hiển thị
+                request.session["last_order_id"] = order.id
+                request.session["last_subtotal"] = subtotal
+                request.session["last_discount_amount"] = discount_amount
+                request.session["last_discount_code"] = discount_code
+                request.session["last_final_total"] = final_total
 
-            # gửi mail (đừng để crash nếu SSL lỗi)
-            try:
-                order_items = order.orderitem_set.select_related("product").all()
-                order_details = "\n".join([
-                    f"{it.product.name}: {it.quantity} x {it.product.price} VNĐ"
-                    for it in order_items
-                ])
+                # ✅ Clear discount sau khi thanh toán (cho order tiếp theo)
+                request.session["discount_code"] = ""
+                request.session["discount_amount"] = 0
 
-                message = f"""
+                # Email nội dung (bọc try/except để không crash vì SSL)
+                try:
+                    order_items = order.orderitem_set.all()
+                    order_details = "\n".join([
+                        f"{item.product.name}: {item.quantity} x {item.product.price} VNĐ"
+                        for item in order_items
+                    ])
+
+                    message = f"""
 Hi {customer.name}, You have successfully placed an order at HomeClick!
 
 Order Details:
 {order_details}
 
 Subtotal: {subtotal} VNĐ
-Discount ({discount_code if discount_code else "None"}): {discount_amount} VNĐ
+Discount ({discount_code if discount_code else "N/A"}): -{discount_amount} VNĐ
 Total after discount: {final_total} VNĐ
 
 We hope you enjoy our service!
 """
-                sendMail("Order confirmed successfully.", message, customer.email)
-            except Exception as e:
-                logger.exception("Send mail failed: %s", e)
+                    sendMail("Order confirmed successfully.", message, customer.email)
+                except Exception as e:
+                    logger.warning("Send mail failed (ignored): %s", e)
 
-            return redirect("payment_success", order_id=order.id)
+                # ✅ Redirect sang trang success đẹp hơn
+                return redirect("payment_success", order_id=order.id)
 
-    context = {
-        "form": form,
-        "is_admin": _is_admin(request),
+    else:
+        form = DeliveryForm()
+        if 'submitted' in request.GET:
+            submitted = True
 
-        # nếu bạn muốn show lại ở paypage:
-        "subtotal": subtotal,
-        "discount_amount": discount_amount,
-        "discount_code": discount_code,
-        "final_total": final_total,
-    }
+    context = {'form': form, 'submitted': submitted, "is_admin": _is_admin(request)}
     return render(request, "app/paypage.html", context)
 
 
 @login_required
 def payment_success(request, order_id):
     """
-    ✅ Trang thanh toán thành công
-    ✅ Hiển thị đúng total sau voucher (final_total)
+    Trang thanh toán thành công (bạn tạo template: app/payment_success.html)
     """
     if _is_admin(request) or (not hasattr(request.user, "customer")):
         return redirect("home")
 
     customer = request.user.customer
     paid_order = get_object_or_404(Order, id=order_id, customer=customer)
+
     paid_items = paid_order.orderitem_set.select_related("product").all()
 
-    # Snapshot từ session (được set ở payPage)
+    # lấy summary từ session (nếu có)
     last_order_id = request.session.get("last_order_id")
     subtotal = request.session.get("last_subtotal", None)
-    discount_amount = int(request.session.get("last_discount_amount", 0) or 0)
+    discount_amount = request.session.get("last_discount_amount", 0)
     discount_code = request.session.get("last_discount_code", "")
     final_total = request.session.get("last_final_total", None)
 
-    # Nếu mở lại order khác / session không còn => fallback về subtotal
-    if last_order_id != paid_order.id or subtotal is None or final_total is None:
+    # chỉ dùng session nếu đúng order vừa thanh toán
+    if last_order_id != paid_order.id:
         subtotal = int(paid_order.get_cart_total)
         discount_amount = 0
         discount_code = ""
         final_total = subtotal
 
+    # (tuỳ bạn) clear session summary sau khi hiển thị 1 lần
+    request.session.pop("last_order_id", None)
+    request.session.pop("last_subtotal", None)
+    request.session.pop("last_discount_amount", None)
+    request.session.pop("last_discount_code", None)
+    request.session.pop("last_final_total", None)
+
     context = {
         "is_admin": _is_admin(request),
         "paid_order": paid_order,
         "paid_items": paid_items,
-
-        "subtotal": int(subtotal),
-        "discount_amount": int(discount_amount),
+        "subtotal": subtotal,
+        "discount_amount": discount_amount,
         "discount_code": discount_code,
-        "final_total": int(final_total),
+        "final_total": final_total,
     }
     return render(request, "app/payment_success.html", context)
 
@@ -446,9 +460,9 @@ def profileUser(request):
     user = request.user
     customer = Customer.objects.get(user=user)
 
-    if request.method == "POST":
-        phone_number = request.POST.get("phone_number")
-        address = request.POST.get("address")
+    if request.method == 'POST':
+        phone_number = request.POST.get('phone_number')
+        address = request.POST.get('address')
 
         if phone_number:
             customer.phone_number = phone_number
@@ -456,15 +470,15 @@ def profileUser(request):
             customer.address = address
         customer.save()
 
-        return JsonResponse({"status": "success"})
+        return JsonResponse({'status': 'success'})
 
     context = {
-        "user": user,
-        "phone_number": customer.phone_number,
-        "address": customer.address,
+        'user': user,
+        'phone_number': customer.phone_number,
+        'address': customer.address,
         "is_admin": _is_admin(request),
     }
-    return render(request, "app/profile.html", context)
+    return render(request, 'app/profile.html', context)
 
 
 def detail(request):
@@ -474,29 +488,29 @@ def detail(request):
 
 def signup(request):
     if request.method == "POST":
-        username = request.POST.get("username", "").strip()
-        first_name = request.POST.get("first_name", "").strip()
-        last_name = request.POST.get("last_name", "").strip()
-        email = request.POST.get("email", "").strip()
-        password = request.POST.get("password", "")
-        confirm_password = request.POST.get("confirm_password", "")
+        username = request.POST.get('username', '').strip()
+        first_name = request.POST.get('first_name', '').strip()
+        last_name = request.POST.get('last_name', '').strip()
+        email = request.POST.get('email', '').strip()
+        password = request.POST.get('password', '')
+        confirm_password = request.POST.get('confirm_password', '')
 
         if password != confirm_password:
             messages.error(request, "Password doesn't match. Please try again.")
-            return redirect("signup")
+            return redirect('signup')
 
         user = User.objects.create_user(
             username=username,
             email=email,
             password=password,
             first_name=first_name,
-            last_name=last_name,
+            last_name=last_name
         )
         customer = Customer.objects.create(user=user, name=user.username, email=user.email)
         user.save()
         customer.save()
 
-        messages.success(request, "You have successfully registered! Please log in to continue.")
+        messages.success(request, 'You have successfully registered! Please log in to continue.')
         return render(request, "app/login.html")
 
     return render(request, "app/register.html")
@@ -504,11 +518,11 @@ def signup(request):
 
 def signin(request):
     if request.user.is_authenticated:
-        return redirect("home")
+        return redirect('home')
 
     if request.method == "POST":
-        username = request.POST.get("username", "").strip()
-        password = request.POST.get("password", "")
+        username = request.POST.get('username', '').strip()
+        password = request.POST.get('password', '')
 
         user = authenticate(username=username, password=password)
 
@@ -516,79 +530,80 @@ def signin(request):
             login(request, user)
 
             # nếu không có customer => coi như admin
-            if not hasattr(request.user, "customer"):
-                request.session["admin"] = True
+            if not hasattr(request.user, 'customer'):
+                request.session['admin'] = True
             else:
-                request.session["admin"] = False
+                request.session['admin'] = False
 
-            return redirect("home")
-
-        messages.info(request, "Username or password is not correct!!!")
+            return redirect('home')
+        else:
+            messages.info(request, 'Username or password is not correct!!!')
 
     return render(request, "app/login.html")
 
 
 def custom_logout(request):
     logout(request)
-    messages.success(request, "You have successfully logged out!")
-    return redirect("home")
+    messages.success(request, 'You have successfully logged out!')
+    return redirect('home')
 
 
 # Admin role
 def addArticle(request):
     submitted = False
-    if request.method == "POST":
+    if request.method == 'POST':
         form = ArticleForm(request.POST, request.FILES)
         if form.is_valid():
             form.save()
-            return HttpResponseRedirect("/addArticle?submitted=True")
+            return HttpResponseRedirect('/addArticle?submitted=True')
     else:
         form = ArticleForm
-        if "submitted" in request.GET:
+        if 'submitted' in request.GET:
             submitted = True
 
-    context = {"form_A": form, "submitted": submitted, "is_admin": _is_admin(request)}
-    return render(request, "app/addArticle.html", context)
+    context = {'form_A': form, 'submitted': submitted, "is_admin": _is_admin(request)}
+    return render(request, 'app/addArticle.html', context)
 
 
 def addProduct(request):
     submitted = False
-    if request.method == "POST":
+    if request.method == 'POST':
         form = ProductForm(request.POST, request.FILES)
         if form.is_valid():
             form.save()
-            return HttpResponseRedirect("/addProduct?submitted=True")
+            return HttpResponseRedirect('/addProduct?submitted=True')
     else:
         form = ProductForm
-        if "submitted" in request.GET:
+        if 'submitted' in request.GET:
             submitted = True
 
-    context = {"form": form, "submitted": submitted, "is_admin": _is_admin(request)}
-    return render(request, "app/addproduct.html", context)
+    context = {'form': form, 'submitted': submitted, "is_admin": _is_admin(request)}
+    return render(request, 'app/addproduct.html', context)
 
 
 def searchpage(request):
-    _, order, items, cartItems = _get_order_context(request)
+    customer, order, items, cartItems = _get_order_context(request)
 
     if request.method == "POST":
-        searched = request.POST.get("searched", "").strip()
+        searched = request.POST.get('searched', '').strip()
         product = Product.objects.filter(Q(name__icontains=searched) | Q(code__icontains=searched))
         return render(request, "app/searchpage.html", {
-            "searched": searched,
-            "product": product,
-            "cartItems": cartItems,
-            "is_admin": _is_admin(request),
+            'searched': searched,
+            'product': product,
+            'cartItems': cartItems,
+            'is_admin': _is_admin(request),
         })
 
     return render(request, "app/searchpage.html", {
-        "cartItems": cartItems,
-        "is_admin": _is_admin(request),
+        'cartItems': cartItems,
+        'is_admin': _is_admin(request),
     })
 
 
 def sendMail(subject, message, receiver):
     """
-    ✅ Không để crash app nếu local SSL mail lỗi.
+    ✅ Fix lỗi SSL CERTIFICATE_VERIFY_FAILED:
+    nếu gửi mail lỗi thì không làm crash thanh toán.
     """
     try:
         sender = settings.EMAIL_HOST_USER
@@ -597,9 +612,9 @@ def sendMail(subject, message, receiver):
             message,
             sender,
             [receiver],
-            fail_silently=True,   # ✅ đổi sang True để tránh SSLCertVerificationError làm sập trang
+            fail_silently=False,
         )
     except Exception as e:
-        logger.exception("sendMail failed: %s", e)
+        logger.warning("sendMail failed (ignored): %s", e)
 
 
