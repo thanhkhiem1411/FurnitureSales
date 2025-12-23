@@ -1,16 +1,25 @@
 {% load static %}
 {% block countdown %}
-  <div class="product-sale container-fluid d-flex">
+  <div class="product-sale container-fluid d-flex"
+       id="sale-countdown"
+       data-start="2025-12-19T00:00:00+07:00"
+       data-end="2025-12-25T23:59:59+07:00">
+
     <div class="product-sale-img">
-      <img class="product-sale-img img-fluid" src="{% static 'images/ProductSale.png' %}" alt="ProductSale" />
+      <img class="product-sale-img img-fluid"
+           src="{% static 'images/ProductSale.png' %}"
+           alt="ProductSale" />
     </div>
+
     <div class="product-sale-content">
       <div class="product-title">SPECIAL OFFER</div>
       <div class="product-name">HEXCO CHAIR</div>
       <div class="product-script">
-        The group buying program with discounted prices starts on [date]. <b>19/12</b> to <b>25/12/2025</b>. With reduced prices <b>50%</b>.<br />
+        The group buying program with discounted prices starts on [date].
+        <b>19/12</b> to <b>25/12/2025</b>. With reduced prices <b>50%</b>.<br />
         For <b>The first 50 group purchase orders!</b>
       </div>
+
       <div class="clock-countdown">
         <div class="clock-container">
           <div class="clock-item">
@@ -31,7 +40,67 @@
           </div>
         </div>
       </div>
-      <button class="button-product-sale">BYE NOW</button>
+
+      <button class="button-product-sale">BUY NOW</button>
     </div>
   </div>
+
+  <script>
+    document.addEventListener("DOMContentLoaded", () => {
+      const root = document.getElementById("sale-countdown");
+      if (!root) return;
+
+      // LẤY ĐÚNG ID THEO HTML GỐC
+      const daysEl = document.getElementById("days");
+      const hoursEl = document.getElementById("hours");
+      const minutesEl = document.getElementById("minutes");
+      const secondsEl = document.getElementById("seconds");
+
+      const startTime = Date.parse(root.dataset.start);
+      const endTime = Date.parse(root.dataset.end);
+
+      if (Number.isNaN(startTime) || Number.isNaN(endTime)) {
+        console.warn("Invalid countdown date format. Use ISO like 2025-12-25T23:59:59+07:00");
+        return;
+      }
+
+      const pad2 = (n) => String(n).padStart(2, "0");
+
+      function render(diffMs) {
+        const totalSeconds = Math.max(0, Math.floor(diffMs / 1000));
+        const days = Math.floor(totalSeconds / 86400);
+        const hours = Math.floor((totalSeconds % 86400) / 3600);
+        const minutes = Math.floor((totalSeconds % 3600) / 60);
+        const seconds = totalSeconds % 60;
+
+        if (daysEl) daysEl.textContent = pad2(days);
+        if (hoursEl) hoursEl.textContent = pad2(hours);
+        if (minutesEl) minutesEl.textContent = pad2(minutes);
+        if (secondsEl) secondsEl.textContent = pad2(seconds);
+      }
+
+      function tick() {
+        const now = Date.now();
+
+        // Chưa tới ngày bắt đầu -> đếm tới start
+        if (now < startTime) {
+          render(startTime - now);
+          return;
+        }
+
+        // Đang trong chương trình -> đếm tới end
+        if (now <= endTime) {
+          render(endTime - now);
+          return;
+        }
+
+        // Hết hạn
+        render(0);
+        clearInterval(timer);
+      }
+
+      tick();
+      const timer = setInterval(tick, 1000);
+    });
+  </script>
 {% endblock %}
